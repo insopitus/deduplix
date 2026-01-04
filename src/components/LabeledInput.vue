@@ -17,7 +17,7 @@ const props = defineProps({
     label: String,
     type: String,
     placeholder: String,
-    modelValue: String,
+    modelValue: [String, Number],
 });
 
 const emit = defineEmits(["update:modelValue", "change", "blur"]);
@@ -29,21 +29,30 @@ function updateValue(event) {
 
 <style lang="css" scoped>
 .labeled-input {
-    align-items: center;
     position: relative;
-    margin-top: 12px;
+    margin-top: 10px;
 }
 
 label {
-    position: absolute;
-    top: -12px;
-    left: 4px;
+    display: block;
     font-size: 12px;
-    color: rgb(30, 30, 30);
+    color: var(--muted);
+    margin-bottom: 6px;
 }
 
 input {
     width: 100%;
-    height: 100%;
+    padding: 10px 12px;
+    border-radius: 8px;
+    border: 1px solid rgba(15,23,42,0.06);
+    background: transparent;
+    box-shadow: 0 2px 6px rgba(2,6,23,0.04);
+    transition: border-color .12s ease, box-shadow .12s ease, transform .06s ease;
+}
+input:focus {
+    outline: none;
+    border-color: rgba(79,131,255,0.6);
+    box-shadow: 0 8px 26px rgba(79,131,255,0.08);
+    transform: translateY(-1px);
 }
 </style>

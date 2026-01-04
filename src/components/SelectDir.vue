@@ -73,17 +73,28 @@ function convertSize(num: number, unit: SizeUnit) {
     <div class="home">
         <div class="mask"></div>
         <div class="main">
-            <button @click="chooseDirectory">Choose a directory...</button>
+            <div class="hero">
+                <h2>Choose a directory to analyze</h2>
+                <p class="muted">
+                    Find duplicate files quickly — configure filters below if
+                    needed.
+                </p>
+            </div>
+
+            <button class="primary" @click="chooseDirectory">
+                Choose a directory...
+            </button>
+
             <LabeledInput
                 v-model="include"
                 label="include:"
                 style="width: 100%"
-                placeholder="e.g. **/*.txt, **/*.mp4 Separate by commas"
+                placeholder="e.g. **/*.txt, **/*.mp4 (separated by commas)"
             />
             <LabeledInput
                 v-model="exclude"
                 label="exclude:"
-                placeholder="e.g. **/*.txt, **/*.mp4 Separate by commas"
+                placeholder="e.g. **/*.txt, **/*.mp4 (separated by commas)"
             />
 
             <div class="size-line">
@@ -99,7 +110,7 @@ function convertSize(num: number, unit: SizeUnit) {
                         v-model="minSizeUnit"
                         name="min-size"
                         label="size unit:"
-                        style="position: absolute; right: 4px; top: 10px"
+                        style="position: absolute; right: 4px; top: 37px"
                         :options="['B', 'KB', 'MB', 'GB']"
                     />
                 </div>
@@ -115,8 +126,7 @@ function convertSize(num: number, unit: SizeUnit) {
                     <SizeUnitRadio
                         v-model="maxSizeUnit"
                         name="max-size"
-                        label="size unit:"
-                        style="position: absolute; right: 4px; top: 10px"
+                        style="position: absolute; right: 4px; top: 37px"
                         :options="['B', 'KB', 'MB', 'GB']"
                     />
                 </div>
@@ -125,41 +135,59 @@ function convertSize(num: number, unit: SizeUnit) {
     </div>
 </template>
 
-<style lang="css" scoped>
+<style scoped>
 .home {
     display: flex;
     justify-content: center;
-    align-items: center;
-    flex-direction: column;
-    flex-grow: 1;
 }
-
 .main {
-    width: 60%;
-    min-width: 400px;
-    max-width: 800px;
-}
-
-button {
-    font-size: 24px;
     width: 100%;
-    z-index: 1;
-    height: 80px;
-}
-
-.max-line,
-.min-line {
+    max-width: 740px;
+    background: var(--card);
+    border-radius: 12px;
+    padding: 18px;
+    box-shadow: var(--shadow);
     display: flex;
-    position: relative;
+    flex-direction: column;
+    gap: 12px;
 }
 
-.mask {
-    background-color: rgba(0, 0, 0, 0.5);
-    z-index: 0;
+.hero h2 {
+    margin: 4px 0 2px;
+    font-size: 20px;
+}
+.muted {
+    color: var(--muted);
+    margin: 0 0 8px;
+    font-size: 13px;
+}
+
+button.primary {
+    appearance: none;
+    border: none;
+    background: linear-gradient(90deg, var(--accent), var(--accent-2));
+    color: white;
+    padding: 10px 14px;
+    font-weight: 600;
+    border-radius: 10px;
+    cursor: pointer;
+    box-shadow: 0 6px 18px rgba(80, 120, 220, 0.12);
+    transition:
+        transform 0.12s ease,
+        box-shadow 0.12s ease;
+}
+button.primary:hover {
+    box-shadow: 0 10px 28px rgba(80, 120, 220, 0.16);
 }
 
 .size-line {
     display: flex;
-    gap: 10px;
+    gap: 12px;
+    flex-wrap: wrap;
+}
+.min-line,
+.max-line {
+    flex: 1 1 220px;
+    position: relative;
 }
 </style>

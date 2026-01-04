@@ -16,17 +16,17 @@ function revealItem(path:string){
 </script>
 
 <template>
-	<section>
-		<p>
-			<span class="hash">{{ item.hash }}</span>&nbsp;&nbsp;<span class="size">{{ item.size }}</span>
-		</p>
-		<ul>
-			<li class="file-item" v-for="child in item.files">
-				<!-- <input type="checkbox"> -->
-				<span class="file-name">{{ child }}</span>
+	<section class="dup-card">
+		<div class="dup-meta">
+			<div class="hash">{{ item.hash }}</div>
+			<div class="size">{{ item.size }}</div>
+		</div>
+		<ul class="file-list">
+			<li class="file-item" v-for="child in item.files" :key="child">
+				<span class="file-name" :title="child">{{ child }}</span>
 				<div class="ctrl">
-					<div @click="revealItem(child)" title="Reveal in file explorer" class="reveal">REV</div>
-					<div @click="removeItem(child,item.files)" title="Remove file" class="delete">DEL</div>
+					<button class="reveal" @click="revealItem(child)" title="Reveal in file explorer">Reveal</button>
+					<button class="delete" @click="removeItem(child,item.files)" title="Remove file">Delete</button>
 				</div>
 			</li>
 		</ul>
@@ -34,70 +34,76 @@ function revealItem(path:string){
 </template>
 
 <style lang="css" scoped>
-p {
-	display: block;
-	background-color: aquamarine;
-	padding: 4px 8px;
-    margin-bottom: 4px;
+.dup-card{
+  background: var(--card);
+  padding: 12px;
+  border-radius: 10px;
+  box-shadow: var(--shadow);
+  margin-bottom: 12px;
 }
-span.hash {
-	font-family: ui-monospace, 'Cascadia Mono', 'Segoe UI Mono', 'Roboto Mono', 
-               'Fira Mono', 'Droid Sans Mono', 'Source Code Pro', Menlo, 
-               Monaco, 'Ubuntu Mono', Consolas, monospace;
-	font-weight: bold;
+.dup-meta{
+  display:flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 8px;
 }
-span.size{
-	color: gray;
-	font-size: 14px;
+.hash{
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, 'Cascadia Mono', 'Roboto Mono', monospace;
+  font-weight: 700;
+  font-size: 13px;
+  color: #0f172a;
+  word-break: break-all;
 }
-span.file-name{
-	font-size: 14px;
+.size { color: var(--muted); font-size: 13px; }
+
+.file-list { margin:0; padding:0; list-style:none; display:flex; flex-direction:column; gap:6px; }
+.file-item{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  padding: 8px;
+  border-radius: 8px;
+  transition: background .12s ease, transform .06s ease;
 }
-ul {
-	margin: 0;
+.file-item:hover{
+  background: rgba(79,131,255,0.04);
 }
-li {
-	margin-left: 12px;
-}
-input[type='checkbox'] {
-	box-shadow: none;
-}
-li.file-item{
-    padding: 0 4px;
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
+.file-name{
+  font-size: 14px;
+  color: #061025;
+  max-width: 75%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
-/* li.file-item:hover{
-    background: rgba(0,0,0,0.2);
-} */
- .ctrl{
-	display: flex;
- }
-.ctrl div{
-	font-size: 12px;
-	padding: 2px 8px;
-    cursor: pointer;
-
+.ctrl {
+  display:flex;
+  gap:8px;
 }
-.ctrl div:hover{
-	font-size: 12px;
-	box-shadow: 0 0 2px rgba(0,0,0,0.2);
-	background-color: white;
+.ctrl button{
+  border: 1px solid transparent;
+  background: transparent;
+  padding: 6px 8px;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 13px;
 }
-.ctrl div.delete{
-    color: red;
+.ctrl button.reveal{
+  color: var(--accent);
+  border: 1px solid rgba(79,131,255,0.12);
+  background: rgba(79,131,255,0.04);
 }
-.ctrl div.delete:hover{
-    color: white;
-	background-color: red;
+.ctrl button.reveal:hover{
+  background: linear-gradient(90deg, rgba(79,131,255,0.06), rgba(36,200,219,0.04));
 }
-.ctrl div.reveal{
-	color: black;
+.ctrl button.delete{
+  color: #b91c1c;
+  border: 1px solid rgba(185,28,28,0.08);
 }
-.ctrl div.reveal:hover{
-	color: white;
-	background: black;
+.ctrl button.delete:hover{
+  background: rgba(185,28,28,0.08);
+  color: white;
 }
 </style>
