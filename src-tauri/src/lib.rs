@@ -67,7 +67,7 @@ fn start_analysis(path: &str, config: Config, window: tauri::Window) -> Result<R
                             .and_modify(|v: &mut Vec<_>| {
                                 v.push(p.clone());
                             })
-                            .or_insert(vec![p]);
+                            .or_insert_with(|| vec![p]);
                     }
                 }
             });
@@ -125,7 +125,7 @@ fn start_analysis(path: &str, config: Config, window: tauri::Window) -> Result<R
                             .and_modify(|vec: &mut Vec<_>| {
                                 vec.push(p.clone());
                             })
-                            .or_insert(vec![p]);
+                            .or_insert_with(|| vec![p]);
                     }
                 }
             }
@@ -211,7 +211,7 @@ fn read_entries(
                         .and_modify(|value: &mut Vec<PathBuf>| {
                             value.push(entry.path());
                         })
-                        .or_insert(vec![entry.path()]);
+                        .or_insert_with(|| vec![entry.path()]);
                 } else if metadata.is_dir() {
                     read_entries(entry.path(), map, include, exclude);
                 }
@@ -230,7 +230,8 @@ fn reveal_file_in_explorer(root_path: &str, rel_path: &str) -> Result<(), String
         return Err("File doesn't exist.".into());
     }
 
-    // Windows 系统命令
+    // Windows system command
+    #[cfg(windows)]
     Command::new("explorer")
         .args(&["/select,", &path.to_string_lossy()])
         .spawn()
