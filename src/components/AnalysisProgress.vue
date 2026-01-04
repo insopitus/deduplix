@@ -28,32 +28,30 @@ listen('full-hash-done', () => {
 .progress ul {
 	display: flex;
 	width: 100%;
-	--color: aquamarine;
+	padding:0;
+	margin:0;
+	gap:8px;
 }
 .progress ul li {
-	padding: 4px 10px;
-	font-size: 12px;
+	padding: 8px 12px;
+	font-size: 13px;
 	color: rgb(51, 51, 51);
-	background-color: white;
+	background-color: rgba(255,255,255,0.6);
 	flex-grow: 1;
 	text-align: center;
 	vertical-align: top;
-	/* height: 4px; */
+	border-radius: 8px;
+	border: 1px solid rgba(2,6,23,0.04);
+	box-shadow: 0 4px 12px rgba(2,6,23,0.03);
+	transition: transform .12s ease, background .12s ease;
 }
 .progress ul li.active {
-	background: linear-gradient(45deg, #fff 20%, var(--color) 40%, var(--color) 60%, #fff 80%);
-	background-size: 200% auto;
-	animation: shine 1s linear infinite;
+	background: linear-gradient(90deg, rgba(79,131,255,0.12), rgba(36,200,219,0.06));
+	transform: translateY(-3px);
 }
 .progress ul li.done {
-	background-color: var(--color);
-}
-@keyframes shine {
-	/* from {
-        background-position: 0% center;
-    } */
-	to {
-		background-position: -200% center;
-	}
+	background: linear-gradient(90deg,var(--accent),var(--accent-2));
+	color: white;
+	transform: translateY(-2px);
 }
 </style>

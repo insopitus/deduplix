@@ -24,7 +24,7 @@ function goback() {
 <template>
 	<header class="top-bar">
 		<input :value="props.workingPath" disabled />
-		<button @click="goback" :disabled="!analysisDone">Back</button>
+		<button class="back" @click="goback" :disabled="!analysisDone">Back</button>
 	</header>
 	<main>
 		<AnalysisProgress v-if="!analysisDone"></AnalysisProgress>
@@ -40,23 +40,44 @@ function goback() {
 <style lang="css" scoped>
 header.top-bar {
 	display: flex;
-	justify-content: space-between;
+	align-items: center;
+	gap: 12px;
+	margin-bottom: 12px;
 }
-
 header.top-bar input {
 	flex-grow: 1;
+	padding: 10px 12px;
+	border-radius: 8px;
+	border: 1px solid rgba(15,23,42,0.06);
+	background: transparent;
+}
+button.back{
+  padding: 8px 12px;
+  border-radius: 8px;
+  background: transparent;
+  border: 1px solid rgba(15,23,42,0.06);
+  cursor: pointer;
+  font-weight: 600;
+}
+button.back:disabled{
+  opacity: 0.5;
+  cursor: not-allowed;
 }
 
 main {
 	flex-grow: 1;
-	padding-top: 16px;
+	padding-top: 6px;
+	display:flex;
+	flex-direction:column;
+	gap: 12px;
 }
 
 .no-result {
 	display: flex;
-	height: 100%;
-	font-size: 24px;
+	height: 200px;
+	font-size: 18px;
 	align-items: center;
 	justify-content: center;
+	color: var(--muted);
 }
 </style>
