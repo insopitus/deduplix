@@ -71,7 +71,6 @@ function convertSize(num: number, unit: SizeUnit) {
 
 <template>
     <div class="home">
-        <div class="mask"></div>
         <div class="main">
             <div class="hero">
                 <h2>Choose a directory to analyze</h2>
@@ -137,12 +136,11 @@ function convertSize(num: number, unit: SizeUnit) {
 
 <style scoped>
 .home {
-    display: flex;
-    justify-content: center;
+    width: 100%;
+    max-width: 740px;
 }
 .main {
     width: 100%;
-    max-width: 740px;
     background: var(--card);
     border-radius: 12px;
     padding: 18px;

@@ -71,10 +71,12 @@ body,
 }
 
 .container {
-    max-width: 980px;
+    width: 100%;
     margin: 24px auto;
     padding: 18px;
     display: flex;
+    justify-content: center;
+    align-items: center;
     flex-direction: column;
     gap: var(--gap);
     min-height: calc(100vh - 48px);
