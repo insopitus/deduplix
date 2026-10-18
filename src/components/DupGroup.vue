@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { invoke } from "@tauri-apps/api/core";
 import { ask } from "@tauri-apps/plugin-dialog";
+import { Copy, File, FolderOpen, Hash, Trash } from "@lucide/vue";
 import { computed, ref } from "vue";
 
 const props = defineProps<{
@@ -84,12 +85,16 @@ async function revealItem(path: string) {
     <section class="dup-card">
         <header class="dup-head">
             <div class="head-left">
-                <span class="badge">{{ item.files.length }} copies</span>
-                <span class="size">{{ item.size }}</span>
+                <span class="badge">
+                    <Copy :size="12" aria-hidden="true" />
+                    {{ item.files.length }} copies
+                </span>
+                <span class="hash" :title="`XXH64: ${item.hash}`">
+                    <Hash :size="12" aria-hidden="true" />
+                    <span class="hash-value">{{ item.hash }}</span>
+                </span>
             </div>
-            <span class="hash" :title="`XXH64: ${item.hash}`">
-                XXH64 · {{ item.hash }}
-            </span>
+            <span class="size">{{ item.size }}</span>
         </header>
 
         <ul class="file-list">
@@ -99,6 +104,7 @@ async function revealItem(path: string) {
                 class="file-item"
                 :class="{ removing: removing === row.full }"
             >
+                <File :size="18" class="file-icon" aria-hidden="true" />
                 <div class="file-text" :title="row.full">
                     <span class="file-name">{{ row.name }}</span>
                     <span v-if="row.dir" class="file-dir">{{ row.dir }}</span>
@@ -110,6 +116,7 @@ async function revealItem(path: string) {
                         title="Reveal in file explorer"
                         @click="revealItem(row.full)"
                     >
+                        <FolderOpen :size="13" aria-hidden="true" />
                         Reveal
                     </button>
                     <button
@@ -119,6 +126,7 @@ async function revealItem(path: string) {
                         :disabled="removing !== null"
                         @click="removeItem(row.full, item.files)"
                     >
+                        <Trash :size="13" aria-hidden="true" />
                         Delete
                     </button>
                 </div>
@@ -159,10 +167,14 @@ async function revealItem(path: string) {
     display: flex;
     align-items: center;
     gap: 8px;
+    flex: 1 1 auto;
     min-width: 0;
 }
 
 .badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
     padding: 2px 9px;
     border-radius: 999px;
     background: var(--accent-soft);
@@ -173,22 +185,38 @@ async function revealItem(path: string) {
 }
 
 .size {
+    flex: none;
     color: var(--muted);
     font-size: 12.5px;
     font-variant-numeric: tabular-nums;
+    white-space: nowrap;
 }
 
 .hash {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
     min-width: 0;
     overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
+    line-height: 1;
     font-family:
         ui-monospace, SFMono-Regular, Menlo, Monaco, "Cascadia Mono",
         "Roboto Mono", monospace;
     font-size: 11px;
     color: var(--muted);
     opacity: 0.8;
+}
+
+.hash :deep(svg) {
+    display: block;
+    flex: none;
+}
+
+.hash-value {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    line-height: 1;
 }
 
 .file-list {
@@ -202,7 +230,7 @@ async function revealItem(path: string) {
 
 .file-item {
     display: grid;
-    grid-template-columns: minmax(0, 1fr) auto;
+    grid-template-columns: auto minmax(0, 1fr) auto;
     align-items: center;
     gap: 10px;
     padding: 8px 10px;
@@ -210,6 +238,11 @@ async function revealItem(path: string) {
     transition:
         background 0.12s ease,
         opacity 0.12s ease;
+}
+
+.file-icon {
+    flex: none;
+    color: var(--muted);
 }
 
 .file-item:hover {
@@ -251,6 +284,9 @@ async function revealItem(path: string) {
 }
 
 .ctrl button {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
     padding: 5px 10px;
     border-radius: 7px;
     border: 1px solid var(--border);
@@ -291,9 +327,10 @@ async function revealItem(path: string) {
 
 @media (max-width: 560px) {
     .file-item {
-        grid-template-columns: minmax(0, 1fr);
+        grid-template-columns: auto minmax(0, 1fr);
     }
     .ctrl {
+        grid-column: 1 / -1;
         justify-content: flex-end;
     }
 }

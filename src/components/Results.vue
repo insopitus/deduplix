@@ -5,6 +5,20 @@ let nextAnalysisId = 0;
 
 <script setup lang="ts">
 import { invoke } from "@tauri-apps/api/core";
+import {
+    ArrowLeft,
+    Check,
+    CircleAlert,
+    Copy,
+    Files,
+    FolderOpen,
+    FolderSearch,
+    HardDrive,
+    Hash,
+    ScanSearch,
+    TriangleAlert,
+    X,
+} from "@lucide/vue";
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 import { computed, onUnmounted, ref } from "vue";
 import { type AnalysisStage } from "../types";
@@ -33,16 +47,19 @@ const stages: AnalysisStage[] = [
         event: "ingestion-done",
         label: "Scanning folder",
         hint: "Building the size index",
+        icon: FolderSearch,
     },
     {
         event: "quick-hash-done",
         label: "Quick filtering",
         hint: "Comparing 1 KB samples",
+        icon: ScanSearch,
     },
     {
         event: "full-hash-done",
         label: "Hashing files",
         hint: "Verifying full contents",
+        icon: Hash,
     },
 ];
 
@@ -209,23 +226,16 @@ function formatBytes(bytes: number) {
                 "
                 @click="handleBack"
             >
-                <span aria-hidden="true">{{ analysisDone ? "←" : "×" }}</span>
+                <ArrowLeft
+                    v-if="analysisDone"
+                    :size="15"
+                    aria-hidden="true"
+                />
+                <X v-else :size="15" aria-hidden="true" />
                 {{ cancelling ? "Cancelling…" : analysisDone ? "Back" : "Cancel" }}
             </button>
             <div class="path" :title="workingPath">
-                <svg
-                    width="15"
-                    height="15"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    stroke-width="2"
-                    stroke-linecap="round"
-                    stroke-linejoin="round"
-                    aria-hidden="true"
-                >
-                    <path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" />
-                </svg>
+                <FolderOpen :size="15" aria-hidden="true" />
                 <span class="path-label">{{
                     cancelling
                         ? "Cancelling"
@@ -237,19 +247,18 @@ function formatBytes(bytes: number) {
             </div>
         </header>
 
-        <div
-            v-if="actionError"
-            class="banner error"
-            role="alert"
-        >
-            <span>{{ actionError }}</span>
+        <div v-if="actionError" class="banner error" role="alert">
+            <span class="banner-message">
+                <CircleAlert :size="15" aria-hidden="true" />
+                <span>{{ actionError }}</span>
+            </span>
             <button
                 type="button"
                 class="dismiss"
                 aria-label="Dismiss error"
                 @click="actionError = ''"
             >
-                ×
+                <X :size="15" aria-hidden="true" />
             </button>
         </div>
 
@@ -259,16 +268,23 @@ function formatBytes(bytes: number) {
             role="status"
             :title="skipped.join('\n')"
         >
-            <span>
-                {{ skipped.length }}
-                {{ skipped.length === 1 ? "file" : "files" }} couldn't be
-                read and {{ skipped.length === 1 ? "was" : "were" }} skipped.
+            <span class="banner-message">
+                <TriangleAlert :size="15" aria-hidden="true" />
+                <span>
+                    {{ skipped.length }}
+                    {{ skipped.length === 1 ? "file" : "files" }} couldn't
+                    be read and
+                    {{ skipped.length === 1 ? "was" : "were" }} skipped.
+                </span>
             </span>
         </div>
 
-        <p v-if="analysisError" class="banner error" role="alert">
-            Analysis failed: {{ analysisError }}
-        </p>
+        <div v-if="analysisError" class="banner error" role="alert">
+            <span class="banner-message">
+                <CircleAlert :size="15" aria-hidden="true" />
+                <span>Analysis failed: {{ analysisError }}</span>
+            </span>
+        </div>
 
         <template v-else>
             <div v-if="!analysisDone" class="progress-card">
@@ -282,20 +298,31 @@ function formatBytes(bytes: number) {
                 <div v-if="groups.length" class="summary">
                     <div class="stat">
                         <strong>{{ groups.length }}</strong>
-                        <span>duplicate groups</span>
+                        <span class="stat-label">
+                            <Copy :size="13" aria-hidden="true" />
+                            duplicate groups
+                        </span>
                     </div>
                     <div class="stat">
                         <strong>{{ redundantFiles }}</strong>
-                        <span>redundant files</span>
+                        <span class="stat-label">
+                            <Files :size="13" aria-hidden="true" />
+                            redundant files
+                        </span>
                     </div>
                     <div class="stat accent">
                         <strong>{{ reclaimable }}</strong>
-                        <span>can be reclaimed</span>
+                        <span class="stat-label">
+                            <HardDrive :size="13" aria-hidden="true" />
+                            can be reclaimed
+                        </span>
                     </div>
                 </div>
 
                 <div v-if="groups.length === 0" class="no-result">
-                    <div class="no-result-icon" aria-hidden="true">✓</div>
+                    <div class="no-result-icon" aria-hidden="true">
+                        <Check :size="20" :stroke-width="2.5" />
+                    </div>
                     <h2>No duplicates found</h2>
                     <p>
                         This folder looks clean. Try widening the size range or
@@ -334,9 +361,9 @@ function formatBytes(bytes: number) {
     display: flex;
     align-items: center;
     gap: 10px;
-    padding: 10px 0;
     margin-top: -10px;
-    background: var(--bg-translucent);
+    padding: 2px;
+    border-radius:9px;
     backdrop-filter: blur(10px);
 }
 
@@ -444,14 +471,27 @@ button.back.cancel:hover:not(:disabled) {
 }
 
 .banner .dismiss {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
     flex: none;
+    padding: 2px;
     border: none;
     background: transparent;
     color: inherit;
-    font-size: 18px;
-    line-height: 1;
-    padding: 0 2px;
     cursor: pointer;
+}
+
+.banner-message {
+    display: flex;
+    align-items: flex-start;
+    gap: 8px;
+    min-width: 0;
+}
+
+.banner-message :deep(svg) {
+    flex: none;
+    margin-top: 1px;
 }
 
 .progress-card {
@@ -491,6 +531,12 @@ button.back.cancel:hover:not(:disabled) {
     color: var(--muted);
 }
 
+.stat-label {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+}
+
 .stat.accent strong {
     color: var(--accent-deep);
 }
@@ -523,8 +569,6 @@ button.back.cancel:hover:not(:disabled) {
     border-radius: 50%;
     background: var(--success-soft);
     color: var(--success);
-    font-size: 20px;
-    font-weight: 700;
 }
 
 .no-result h2 {

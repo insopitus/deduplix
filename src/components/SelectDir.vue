@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { open } from "@tauri-apps/plugin-dialog";
+import { FolderOpen, FolderSearch, ListFilter } from "@lucide/vue";
 import { Ref, ref } from "vue";
 import LabeledInput from "./LabeledInput.vue";
 import SizeUnitRadio from "./SizeUnitRadio.vue";
@@ -15,7 +16,7 @@ const include = ref("");
 const exclude = ref("");
 const minSize = ref(1);
 const minSizeUnit: Ref<SizeUnit> = ref("KB");
-const maxSize = ref(1);
+const maxSize = ref(10);
 const maxSizeUnit: Ref<SizeUnit> = ref("GB");
 
 const MIN_SIZE_VALUE = 0;
@@ -82,7 +83,9 @@ function convertSize(num: number, unit: SizeUnit) {
   <div class="home">
     <div class="main">
       <div class="hero">
-        <span class="eyebrow">Local duplicate finder</span>
+        <div class="hero-mark" aria-hidden="true">
+          <FolderSearch :size="22" :stroke-width="1.8" />
+        </div>
         <h1>Find duplicate files</h1>
         <p class="muted">
           Scan a folder for redundant copies. Everything stays on this device.
@@ -90,26 +93,17 @@ function convertSize(num: number, unit: SizeUnit) {
       </div>
 
       <button class="primary" type="button" @click="chooseDirectory">
-        <svg
-          width="18"
-          height="18"
-          viewBox="0 0 24 24"
-          fill="none"
-          stroke="currentColor"
-          stroke-width="2"
-          stroke-linecap="round"
-          stroke-linejoin="round"
-          aria-hidden="true"
-        >
-          <path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" />
-        </svg>
+        <FolderOpen :size="18" :stroke-width="2" aria-hidden="true" />
         Choose a directory…
       </button>
       <p class="start-hint">Analysis starts right after you pick a folder.</p>
 
       <section class="filters">
         <div class="filters-head">
-          <h2>Filters</h2>
+          <h2>
+            <ListFilter :size="14" :stroke-width="2" aria-hidden="true" />
+            Filters
+          </h2>
           <span>optional</span>
         </div>
 
@@ -154,7 +148,7 @@ function convertSize(num: number, unit: SizeUnit) {
             :min="MIN_SIZE_VALUE"
             :max="MAX_SIZE_VALUE"
             @change="validateSize"
-            placeholder="1"
+            placeholder="10"
           >
             <SizeUnitRadio
               v-model="maxSizeUnit"
@@ -193,14 +187,16 @@ function convertSize(num: number, unit: SizeUnit) {
   margin-bottom: 4px;
 }
 
-.eyebrow {
-  display: inline-block;
-  font-size: 11px;
-  font-weight: 700;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
+.hero-mark {
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  margin-bottom: 12px;
+  border: 1px solid var(--border);
+  border-radius: 13px;
+  background: var(--accent-soft);
   color: var(--accent-deep);
-  margin-bottom: 6px;
 }
 
 .hero h1 {
@@ -272,6 +268,9 @@ button.primary:active {
 }
 
 .filters-head h2 {
+  display: flex;
+  align-items: center;
+  gap: 6px;
   margin: 0;
   font-size: 12px;
   font-weight: 700;

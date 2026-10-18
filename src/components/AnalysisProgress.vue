@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { Check } from "@lucide/vue";
 import { computed } from "vue";
 import type { AnalysisStage } from "../types";
 
@@ -62,10 +63,21 @@ const currentStage = computed<AnalysisStage | undefined>(
                 }"
             >
                 <span class="step-dot" aria-hidden="true">
-                    <span v-if="index < stageIndex">✓</span>
+                    <Check
+                        v-if="index < stageIndex"
+                        :size="10"
+                        :stroke-width="3"
+                    />
                 </span>
                 <span class="step-text">
-                    <span class="step-label">{{ stage.label }}</span>
+                    <span class="step-label">
+                        <component
+                            :is="stage.icon"
+                            :size="13"
+                            aria-hidden="true"
+                        />
+                        {{ stage.label }}
+                    </span>
                     <span class="step-hint">{{ stage.hint }}</span>
                 </span>
             </li>
@@ -223,8 +235,16 @@ const currentStage = computed<AnalysisStage | undefined>(
 }
 
 .step-label {
+    display: flex;
+    align-items: center;
+    gap: 5px;
     font-size: 12.5px;
     font-weight: 600;
+}
+
+.step-label :deep(svg) {
+    flex: none;
+    opacity: 0.8;
 }
 
 .step-hint {
