@@ -1,23 +1,34 @@
 <script setup lang="ts">
-import { SizeUnit } from "../types";
+import type { SizeUnit } from "../types";
+
 defineProps<{
     options: Array<SizeUnit>;
     modelValue: SizeUnit;
+    label?: string;
+    embedded?: boolean;
 }>();
-const emit = defineEmits(["update:modelValue", "change", "blur"]);
+
+const emit = defineEmits(["update:modelValue"]);
 
 function updateValue(option: SizeUnit) {
     emit("update:modelValue", option);
 }
 </script>
+
 <template>
-    <div class="size-unit-radio">
+    <div
+        class="size-unit-radio"
+        :class="{ embedded }"
+        role="group"
+        :aria-label="label"
+    >
         <button
-            @click="updateValue(option)"
-            :class="{ selected: modelValue === option }"
             v-for="option in options"
             :key="option"
             type="button"
+            :class="{ selected: modelValue === option }"
+            :aria-pressed="modelValue === option"
+            @click="updateValue(option)"
         >
             {{ option }}
         </button>
@@ -27,38 +38,55 @@ function updateValue(option: SizeUnit) {
 <style scoped>
 .size-unit-radio {
     display: flex;
-    align-items: center;
-    border: 1px solid rgba(2, 6, 23, 0.06);
-    border-radius: 8px;
+    align-items: stretch;
+    overflow: hidden;
+    border: 1px solid var(--border);
+    border-radius: 9px;
+    background: var(--card-subtle);
 }
+
 .size-unit-radio button {
-    min-width: 36px;
-    height: 28px;
-    padding: 4px 8px;
-    font-size: 13px;
+    min-width: 38px;
+    padding: 0 9px;
+    font-size: 12px;
+    font-weight: 500;
     border: none;
     background: transparent;
+    color: var(--muted);
     cursor: pointer;
     transition:
         background 0.12s ease,
-        color 0.12s ease,
-        transform 0.06s ease;
+        color 0.12s ease;
 }
-.size-unit-radio button:first-child {
-    border-top-left-radius: 8px;
-    border-bottom-left-radius: 8px;
+
+.size-unit-radio button + button {
+    border-left: 1px solid var(--border);
 }
-.size-unit-radio button:last-child {
-    border-top-right-radius: 8px;
-    border-bottom-right-radius: 8px;
+
+/* Used inside LabeledInput's input shell: the shell already provides the
+   border and background, so the selector only adds a divider. */
+.size-unit-radio.embedded {
+    height: auto;
+    border: none;
+    border-left: 1px solid var(--border);
+    border-radius: 0;
+    background: transparent;
 }
-.size-unit-radio button:hover {
-    /*transform: translateY(-1px);*/
+
+.size-unit-radio.embedded button {
+    min-width: 34px;
+    padding: 0 7px;
+    font-size: 11.5px;
 }
+
+.size-unit-radio button:hover:not(.selected) {
+    background: var(--accent-soft);
+    color: var(--text);
+}
+
 .size-unit-radio .selected {
-    background: linear-gradient(90deg, var(--accent), var(--accent-2));
-    color: white;
-    border-color: transparent;
-    box-shadow: 0 6px 18px rgba(36, 200, 219, 0.08);
+    background: var(--accent-fill);
+    color: var(--on-accent);
+    font-weight: 600;
 }
 </style>

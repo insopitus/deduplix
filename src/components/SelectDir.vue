@@ -3,11 +3,14 @@ import { open } from "@tauri-apps/plugin-dialog";
 import { Ref, ref } from "vue";
 import LabeledInput from "./LabeledInput.vue";
 import SizeUnitRadio from "./SizeUnitRadio.vue";
-const emit = defineEmits(["path-selected"]);
-import { SizeUnit } from "../types";
+import { type SizeUnit, type PathConfig } from "../types";
+
+const emit = defineEmits<{ "path-selected": [config: PathConfig] }>();
+
 const KILO_BYTE = 1024;
 const MEGA_BYTE = KILO_BYTE * 1024;
 const GIGA_BYTE = MEGA_BYTE * 1024;
+
 const include = ref("");
 const exclude = ref("");
 const minSize = ref(1);
@@ -19,173 +22,297 @@ const MIN_SIZE_VALUE = 0;
 const MAX_SIZE_VALUE = 999999;
 
 async function chooseDirectory() {
-    open({
-        multiple: false,
-        directory: true,
-    })
-        .then((path) => {
-            console.log(path);
-            if (path) {
-                console.log(typeof path);
-                emit("path-selected", {
-                    path,
-                    config: {
-                        include: include.value,
-                        exclude: exclude.value,
-                        size_extend: [
-                            convertSize(minSize.value, minSizeUnit.value),
-                            convertSize(maxSize.value, maxSizeUnit.value),
-                        ],
-                    },
-                });
-            }
-        })
-        .catch((e) => {
-            console.log(e);
-        });
+  validateSize();
+  try {
+    const path = await open({
+      multiple: false,
+      directory: true,
+    });
+    if (path) {
+      emit("path-selected", {
+        path,
+        config: {
+          include: include.value.trim(),
+          exclude: exclude.value.trim(),
+          size_extend: [
+            convertSize(minSize.value, minSizeUnit.value),
+            convertSize(maxSize.value, maxSizeUnit.value),
+          ],
+        },
+      });
+    }
+  } catch (e) {
+    console.error(e);
+  }
 }
+
+function clampSize(value: unknown, fallback: number) {
+  const n = Number(value);
+  if (!Number.isFinite(n)) return fallback;
+  return Math.min(MAX_SIZE_VALUE, Math.max(MIN_SIZE_VALUE, Math.round(n)));
+}
+
 function validateSize() {
-    if (minSize.value < MIN_SIZE_VALUE) {
-        minSize.value = MIN_SIZE_VALUE;
-    }
-    if (maxSize.value > MAX_SIZE_VALUE) {
-        maxSize.value = MAX_SIZE_VALUE;
-    }
+  minSize.value = clampSize(minSize.value, MIN_SIZE_VALUE);
+  maxSize.value = clampSize(maxSize.value, minSize.value);
+  if (maxSize.value < minSize.value) {
+    maxSize.value = minSize.value;
+  }
 }
+
 function convertSize(num: number, unit: SizeUnit) {
-    let result = num;
-    switch (unit) {
-        case "B":
-            return result;
-        case "KB":
-            return result * KILO_BYTE;
-        case "MB":
-            return result * MEGA_BYTE;
-        case "GB":
-            return result * GIGA_BYTE;
-        default:
-            return 0;
-    }
+  const value = Number(num);
+  if (!Number.isFinite(value)) return 0;
+  switch (unit) {
+    case "B":
+      return value;
+    case "KB":
+      return value * KILO_BYTE;
+    case "MB":
+      return value * MEGA_BYTE;
+    case "GB":
+      return value * GIGA_BYTE;
+    default:
+      return 0;
+  }
 }
 </script>
 
 <template>
-    <div class="home">
-        <div class="main">
-            <div class="hero">
-                <h2>Choose a directory to analyze</h2>
-                <p class="muted">
-                    Find duplicate files quickly — configure filters below if
-                    needed.
-                </p>
-            </div>
+  <div class="home">
+    <div class="main">
+      <div class="hero">
+        <span class="eyebrow">Local duplicate finder</span>
+        <h1>Find duplicate files</h1>
+        <p class="muted">
+          Scan a folder for redundant copies. Everything stays on this device.
+        </p>
+      </div>
 
-            <button class="primary" @click="chooseDirectory">
-                Choose a directory...
-            </button>
+      <button class="primary" type="button" @click="chooseDirectory">
+        <svg
+          width="18"
+          height="18"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+          aria-hidden="true"
+        >
+          <path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" />
+        </svg>
+        Choose a directory…
+      </button>
+      <p class="start-hint">Analysis starts right after you pick a folder.</p>
 
-            <LabeledInput
-                v-model="include"
-                label="include:"
-                style="width: 100%"
-                placeholder="e.g. **/*.txt, **/*.mp4 (separated by commas)"
-            />
-            <LabeledInput
-                v-model="exclude"
-                label="exclude:"
-                placeholder="e.g. **/*.txt, **/*.mp4 (separated by commas)"
-            />
-
-            <div class="size-line">
-                <div class="min-line">
-                    <LabeledInput
-                        v-model="minSize"
-                        label="min size:"
-                        type="number"
-                        @change="validateSize"
-                        placeholder="e.g. 1024"
-                    />
-                    <SizeUnitRadio
-                        v-model="minSizeUnit"
-                        name="min-size"
-                        label="size unit:"
-                        style="position: absolute; right: 4px; top: 37px"
-                        :options="['B', 'KB', 'MB', 'GB']"
-                    />
-                </div>
-                <div class="max-line">
-                    <LabeledInput
-                        v-model="maxSize"
-                        label="max size:"
-                        type="number"
-                        @change="validateSize"
-                        placeholder="e.g. 1024"
-                    />
-
-                    <SizeUnitRadio
-                        v-model="maxSizeUnit"
-                        name="max-size"
-                        style="position: absolute; right: 4px; top: 37px"
-                        :options="['B', 'KB', 'MB', 'GB']"
-                    />
-                </div>
-            </div>
+      <section class="filters">
+        <div class="filters-head">
+          <h2>Filters</h2>
+          <span>optional</span>
         </div>
+
+        <div class="field-grid">
+          <LabeledInput
+            v-model="include"
+            label="Include"
+            placeholder="**/*.txt, **/*.mp4"
+          />
+          <LabeledInput
+            v-model="exclude"
+            label="Exclude"
+            placeholder="**/node_modules, **/*.tmp"
+          />
+        </div>
+        <p class="hint">
+          Glob patterns separated by commas. Leave empty to include everything.
+        </p>
+
+        <div class="size-line">
+          <LabeledInput
+            v-model="minSize"
+            label="Min size"
+            type="number"
+            :min="MIN_SIZE_VALUE"
+            :max="MAX_SIZE_VALUE"
+            @change="validateSize"
+            placeholder="1"
+          >
+            <SizeUnitRadio
+              v-model="minSizeUnit"
+              name="min-size"
+              label="Minimum size unit"
+              :options="['B', 'KB', 'MB', 'GB']"
+              embedded
+            />
+          </LabeledInput>
+          <LabeledInput
+            v-model="maxSize"
+            label="Max size"
+            type="number"
+            :min="MIN_SIZE_VALUE"
+            :max="MAX_SIZE_VALUE"
+            @change="validateSize"
+            placeholder="1"
+          >
+            <SizeUnitRadio
+              v-model="maxSizeUnit"
+              name="max-size"
+              label="Maximum size unit"
+              :options="['B', 'KB', 'MB', 'GB']"
+              embedded
+            />
+          </LabeledInput>
+        </div>
+      </section>
     </div>
+  </div>
 </template>
 
 <style scoped>
 .home {
-    width: 100%;
-    max-width: 740px;
-}
-.main {
-    width: 100%;
-    background: var(--card);
-    border-radius: 12px;
-    padding: 18px;
-    box-shadow: var(--shadow);
-    display: flex;
-    flex-direction: column;
-    gap: 12px;
+  width: 100%;
+  max-width: 720px;
+  margin: 0 auto;
 }
 
-.hero h2 {
-    margin: 4px 0 2px;
-    font-size: 20px;
+.main {
+  width: 100%;
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 26px;
+  box-shadow: var(--shadow);
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
 }
+
+.hero {
+  margin-bottom: 4px;
+}
+
+.eyebrow {
+  display: inline-block;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--accent-deep);
+  margin-bottom: 6px;
+}
+
+.hero h1 {
+  margin: 0 0 4px;
+  font-size: 24px;
+  line-height: 1.2;
+  letter-spacing: -0.02em;
+}
+
 .muted {
-    color: var(--muted);
-    margin: 0 0 8px;
-    font-size: 13px;
+  color: var(--muted);
+  margin: 0;
+  font-size: 13.5px;
 }
 
 button.primary {
-    appearance: none;
-    border: none;
-    background: linear-gradient(90deg, var(--accent), var(--accent-2));
-    color: white;
-    padding: 10px 14px;
-    font-weight: 600;
-    border-radius: 10px;
-    cursor: pointer;
-    box-shadow: 0 6px 18px rgba(80, 120, 220, 0.12);
-    transition:
-        transform 0.12s ease,
-        box-shadow 0.12s ease;
-}
-button.primary:hover {
-    box-shadow: 0 10px 28px rgba(80, 120, 220, 0.16);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 9px;
+  width: 100%;
+  appearance: none;
+  border: none;
+  background: linear-gradient(135deg, var(--accent-fill), var(--accent-fill-2));
+  color: var(--on-accent);
+  padding: 13px 16px;
+  font-size: 15px;
+  font-weight: 600;
+  border-radius: 11px;
+  cursor: pointer;
+  box-shadow: 0 10px 24px rgba(53, 103, 224, 0.24);
+  transition:
+    transform 0.12s ease,
+    box-shadow 0.12s ease,
+    filter 0.12s ease;
 }
 
-.size-line {
-    display: flex;
-    gap: 12px;
-    flex-wrap: wrap;
+button.primary:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 14px 30px rgba(53, 103, 224, 0.3);
+  filter: brightness(1.05);
 }
-.min-line,
-.max-line {
-    flex: 1 1 220px;
-    position: relative;
+
+button.primary:active {
+  transform: translateY(0);
+}
+
+.start-hint {
+  margin: -4px 0 2px;
+  text-align: center;
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.filters {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-top: 6px;
+  padding-top: 16px;
+  border-top: 1px solid var(--border);
+}
+
+.filters-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.filters-head h2 {
+  margin: 0;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.filters-head span {
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.field-grid,
+.size-line {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.field-grid :deep(.labeled-input),
+.size-line :deep(.labeled-input) {
+  margin-top: 0;
+}
+
+.hint {
+  margin: -2px 0 0;
+  font-size: 12px;
+  color: var(--muted);
+}
+
+@media (max-width: 560px) {
+  .main {
+    padding: 20px;
+  }
+  .hero h1 {
+    font-size: 21px;
+  }
+  .field-grid,
+  .size-line {
+    grid-template-columns: minmax(0, 1fr);
+  }
 }
 </style>
