@@ -1,8 +1,33 @@
 # Deduplix
 
-Deduplix is a tool to find duplicates in a selected directory. It uses a 1) size comparing, 2) quick sampled hash to 3) full hash, 3-step filter algorithm.
+A local duplicate file finder with a native [GPUI](https://gpui.rs) interface.
 
-## todos
-- [x] add exclude/include search conditions
-- [x] UI polishing (i suck at ui designing. LLM did a better one)
-- [x] a quick mode to skip "full hash" step
+## How it works
+
+1. **Size** — files are grouped by exact byte size; unique sizes are discarded.
+2. **Sampled hash** — for each remaining file, a 4 KiB sample is hashed with XXH64.
+3. **Full hash** — candidates are hashed end to end. Quick mode stops at step 2 and
+   leaves the final decision to you (nothing is deleted automatically).
+
+Analysis can be cancelled at any time.
+
+## Build
+
+Requires the Rust toolchain (MSVC on Windows).
+
+```sh
+cargo build --release
+```
+
+The result is a single portable executable at `target/release/deduplix.exe`. No
+installer or runtime is needed — copy it anywhere and run it.
+
+On Windows the program icon is embedded at build time (`app.rc` →
+`assets/icon.ico`), and the binary is built as a GUI subsystem app so no console
+window appears.
+
+## Development
+
+```sh
+cargo run
+```

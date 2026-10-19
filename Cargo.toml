@@ -1,0 +1,26 @@
+[package]
+name = "deduplix"
+version = "0.1.0"
+description = "Find duplicate files on disk"
+authors = ["you"]
+edition = "2021"
+build = "build.rs"
+
+[lib]
+name = "dedupper_lib"
+crate-type = ["rlib"]
+
+[dependencies]
+rayon = "1.10.0"
+twox-hash = { version = "2.1.1", default-features = false, features = ["xxhash64"] }
+wax = "0.6.0"
+nohash-hasher = "0.2.0"
+gpui-kit = "0.7.3"
+rfd = "0.15"
+
+[build-dependencies]
+embed-resource = "3"
+
+[profile.release]
+lto = true
+strip = true
