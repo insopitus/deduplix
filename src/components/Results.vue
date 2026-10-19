@@ -54,7 +54,7 @@ const stages: AnalysisStage[] = [
     {
         event: "quick-hash-done",
         label: "Quick filtering",
-        hint: "Comparing 1 KB samples",
+        hint: "Comparing 4 KB samples",
         icon: ScanSearch,
     },
     {
@@ -309,10 +309,11 @@ function formatBytes(bytes: number) {
                 <span class="banner-message">
                     <TriangleAlert :size="15" aria-hidden="true" />
                     <span>
-                        <strong>Quick mode:</strong> groups are matched by a
-                        1&nbsp;KB sample hash, so results are not guaranteed to
-                        be accurate. Run a full hash on a group before deleting
-                        files.
+                        <strong>Quick mode:</strong> files larger than
+                        4&nbsp;KB are matched by a sample hash, so those groups
+                        are not guaranteed to be accurate. Files up to
+                        4&nbsp;KB are fully hashed. Run a full hash on a sampled
+                        group before deleting files.
                     </span>
                 </span>
             </div>

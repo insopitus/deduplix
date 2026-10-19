@@ -1,11 +1,12 @@
 // Learn more about Tauri commands at https://tauri.app/develop/calling-rust/
 
+use nohash_hasher::IntMap;
 use rayon::prelude::*;
 use std::{
-    collections::HashMap,
     fs,
     hash::Hasher,
     io::{BufReader, Read},
+    ops::Range,
     os::windows::fs::MetadataExt,
     path::{Path, PathBuf},
     sync::{
@@ -20,9 +21,9 @@ use wax::Pattern;
 
 const SEED: u64 = 1233135;
 /// Bytes compared by the cheap pre-filter.
-const SAMPLE_SIZE: usize = 1024;
+const SAMPLE_SIZE: usize = 4 * 1024;
 /// Read buffer used while hashing a whole file.
-const BATCH_SIZE: usize = 64 * 1024;
+const BATCH_SIZE: usize = 256 * 1024;
 /// `FILE_ATTRIBUTE_REPARSE_POINT`: symlinks, junctions and mount points.
 /// They can leave the scan root or form a traversal cycle.
 const FILE_ATTRIBUTE_REPARSE_POINT: u32 = 0x400;
@@ -78,7 +79,7 @@ fn start_analysis(
     let skipped = Mutex::new(Vec::new());
 
     // Stage 1: walk the tree and group files by size.
-    let mut size_map = HashMap::new();
+    let mut size_map: IntMap<u64, Vec<PathBuf>> = IntMap::default();
     let instant = Instant::now();
     read_entries(
         root_path,
@@ -86,47 +87,69 @@ fn start_analysis(
         &mut size_map,
         &include,
         &exclude,
+        &size_range,
         token.as_ref(),
     );
     if is_cancelled() {
         return Ok(Report::cancelled());
     }
-    let size_map: HashMap<_, _> = size_map
+    let size_map: IntMap<u64, Vec<PathBuf>> = size_map
         .into_iter()
-        .filter(|(size, list)| *size != 0 && size_range.contains(size) && list.len() > 1)
+        .filter(|(_, list)| list.len() > 1)
         .collect();
     let elapsed = instant.elapsed().as_secs_f32();
     println!("Ingestion took {} seconds", elapsed);
     let instant = Instant::now();
     let _ = window.emit("ingestion-done", ());
 
-    // Stage 2: hash the first 1 KB of every same-size candidate.
+    // Stage 2: hash the first 4 KB of every same-size candidate.
     // For files no larger than the sample this is already a full-file hash.
-    let quick_map_by_size: HashMap<u64, HashMap<u64, Vec<PathBuf>>> = size_map
+    // Parallelize per file rather than per size: a single large size bucket
+    // must not leave the other cores idle.
+    let quick_hashed: Vec<(u64, u64, PathBuf)> = size_map
         .into_par_iter()
-        .map(|(size, list)| {
-            let sample_size = SAMPLE_SIZE.min(size as usize);
-            let mut quick_hash_map: HashMap<u64, Vec<PathBuf>> = HashMap::new();
-            let mut buf = vec![0u8; sample_size];
-            for path in list {
+        .flat_map_iter(|(size, list)| list.into_iter().map(move |path| (size, path)))
+        .map_init(
+            || vec![0u8; SAMPLE_SIZE],
+            |buf, (size, path)| {
                 if token.load(Ordering::Relaxed) {
-                    break;
+                    return None;
                 }
-                match hash_sample(&path, &mut buf) {
-                    Some(hash) => quick_hash_map.entry(hash).or_default().push(path),
-                    None => skipped.lock().unwrap().push(path),
+                let sample_size = SAMPLE_SIZE.min(size as usize);
+                match hash_sample(&path, &mut buf[..sample_size]) {
+                    Some(hash) => Some((size, hash, path)),
+                    None => {
+                        skipped.lock().unwrap().push(path);
+                        None
+                    }
                 }
-            }
-            let quick_hash_map = quick_hash_map
-                .into_iter()
-                .filter(|(_, list)| list.len() > 1)
-                .collect();
-            (size, quick_hash_map)
-        })
+            },
+        )
+        .flatten()
         .collect();
     if is_cancelled() {
         return Ok(Report::cancelled());
     }
+
+    let mut quick_map_by_size: IntMap<u64, IntMap<u64, Vec<PathBuf>>> = IntMap::default();
+    for (size, hash, path) in quick_hashed {
+        quick_map_by_size
+            .entry(size)
+            .or_default()
+            .entry(hash)
+            .or_default()
+            .push(path);
+    }
+    let quick_map_by_size: IntMap<u64, IntMap<u64, Vec<PathBuf>>> = quick_map_by_size
+        .into_iter()
+        .filter_map(|(size, hash_map)| {
+            let hash_map: IntMap<u64, Vec<PathBuf>> = hash_map
+                .into_iter()
+                .filter(|(_, list)| list.len() > 1)
+                .collect();
+            (!hash_map.is_empty()).then_some((size, hash_map))
+        })
+        .collect();
     let elapsed = instant.elapsed().as_secs_f32();
     println!("Rough hashing took {} seconds", elapsed);
     let _ = window.emit("quick-hash-done", ());
@@ -137,12 +160,12 @@ fn start_analysis(
     // Small files already have a complete hash from stage 2, so reuse it.
     // All remaining files are hashed in one flat parallel batch; this keeps
     // every core busy even when there are many groups with only two files.
-    let map: HashMap<u64, HashMap<u64, Vec<PathBuf>>> = if config.quick_mode {
+    let map: IntMap<u64, IntMap<u64, Vec<PathBuf>>> = if config.quick_mode {
         println!("Quick mode: skipping full hashing");
         quick_map_by_size
     } else {
         let instant = Instant::now();
-        let mut map: HashMap<u64, HashMap<u64, Vec<PathBuf>>> = HashMap::new();
+        let mut map: IntMap<u64, IntMap<u64, Vec<PathBuf>>> = IntMap::default();
         let mut large_files: Vec<(u64, PathBuf)> = Vec::new();
         for (size, quick_map) in quick_map_by_size {
             if size <= SAMPLE_SIZE as u64 {
@@ -195,7 +218,7 @@ fn start_analysis(
 
         map.into_iter()
             .map(|(size, hash_map)| {
-                let hash_map = hash_map
+                let hash_map: IntMap<u64, Vec<PathBuf>> = hash_map
                     .into_iter()
                     .filter(|(_, list)| list.len() > 1)
                     .collect();
@@ -225,6 +248,9 @@ fn start_analysis(
             size: to_human_readable_size(size),
             size_bytes: size,
             files: list,
+            // In quick mode files up to `SAMPLE_SIZE` are hashed completely
+            // during the sampling stage, so their groups need no verification.
+            sampled: config.quick_mode && size > SAMPLE_SIZE as u64,
         })
         .collect();
 
@@ -306,11 +332,22 @@ enum HashOutcome {
     Cancelled,
 }
 
+/// Open a file for a long sequential read. The Windows flag lets the cache
+/// manager read ahead and discard already-consumed pages sooner.
+fn open_for_hashing(path: &Path) -> std::io::Result<fs::File> {
+    use std::os::windows::fs::OpenOptionsExt;
+    const FILE_FLAG_SEQUENTIAL_SCAN: u32 = 0x0800_0000;
+    fs::OpenOptions::new()
+        .read(true)
+        .custom_flags(FILE_FLAG_SEQUENTIAL_SCAN)
+        .open(path)
+}
+
 fn hash_file(path: &Path, buf: &mut [u8], token: &AtomicBool) -> HashOutcome {
     if token.load(Ordering::Relaxed) {
         return HashOutcome::Cancelled;
     }
-    let Ok(file) = fs::File::open(path) else {
+    let Ok(file) = open_for_hashing(path) else {
         return HashOutcome::Skipped;
     };
     let mut reader = BufReader::new(file);
@@ -357,7 +394,7 @@ struct FileVerification {
 }
 
 /// Hash the full contents of every file in one candidate group. Used to check
-/// groups produced by quick mode, where only a 1 KB sample was compared.
+/// groups produced by quick mode, where only a 4 KB sample was compared.
 #[tauri::command(async)]
 fn full_hash_group(root_path: &str, rel_paths: Vec<String>) -> Result<GroupVerification, String> {
     let root = Path::new(root_path);
@@ -431,9 +468,10 @@ pub fn run() {
 fn read_entries(
     root: &Path,
     path: &Path,
-    map: &mut HashMap<u64, Vec<PathBuf>>,
+    map: &mut IntMap<u64, Vec<PathBuf>>,
     include: &Option<wax::Any>,
     exclude: &Option<wax::Any>,
+    size_range: &Range<u64>,
     token: &AtomicBool,
 ) {
     if token.load(Ordering::Relaxed) {
@@ -466,7 +504,7 @@ fn read_entries(
         let entry_path = entry.path();
         if metadata.is_dir() {
             if !is_excluded(exclude, root, &entry_path) {
-                read_entries(root, &entry_path, map, include, exclude, token);
+                read_entries(root, &entry_path, map, include, exclude, size_range, token);
             }
         } else if metadata.is_file() {
             if !is_included(include, root, &entry_path) {
@@ -475,7 +513,13 @@ fn read_entries(
             if is_excluded(exclude, root, &entry_path) {
                 continue;
             }
-            map.entry(metadata.file_size())
+            let file_size = metadata.file_size();
+            // Reject files that cannot be duplicates early so their paths are
+            // never allocated into the size index.
+            if file_size == 0 || !size_range.contains(&file_size) {
+                continue;
+            }
+            map.entry(file_size)
                 .and_modify(|value: &mut Vec<PathBuf>| {
                     value.push(entry_path.clone());
                 })
@@ -529,6 +573,8 @@ struct Record {
     size: String,
     size_bytes: u64,
     files: Vec<PathBuf>,
+    /// The hash only covers a sample of each file, not its full contents.
+    sampled: bool,
 }
 
 #[derive(Deserialize)]

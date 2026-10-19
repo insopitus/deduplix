@@ -21,6 +21,7 @@ const props = defineProps<{
         size_bytes?: number;
         files: string[];
         not_duplicates?: boolean;
+        sampled?: boolean;
     };
 }>();
 const emit = defineEmits<{ error: [message: string] }>();
@@ -44,10 +45,22 @@ const hashTitle = computed(() => {
     if (verifyState.value.kind === "done") {
         return `XXH64 (full): ${verifyState.value.hash}`;
     }
-    return props.quickMode
-        ? `XXH64 (1 KB sample): ${props.item.hash}`
+    return props.quickMode && props.item.sampled
+        ? `XXH64 (4 KB sample): ${props.item.hash}`
         : `XXH64: ${props.item.hash}`;
 });
+
+// In quick mode, files no larger than the sample are hashed completely, so
+// there is nothing left for a full-hash pass to check.
+const sampleIsComplete = computed(
+    () => Boolean(props.quickMode) && props.item.sampled === false,
+);
+const showVerify = computed(
+    () =>
+        !sampleIsComplete.value &&
+        verifyState.value.kind !== "done" &&
+        verifyState.value.kind !== "no-duplicates",
+);
 
 async function verifyGroup() {
     if (verifyState.value.kind === "checking") return;
@@ -78,7 +91,7 @@ async function verifyGroup() {
         }
 
         // Keep the largest set of files that share a full hash. Files outside
-        // that set only matched on the 1 KB sample and are not duplicates.
+        // that set only matched on the 4 KB sample and are not duplicates.
         const byHash = new Map<string, string[]>();
         for (const file of hashed) {
             const paths = byHash.get(file.hash);
@@ -201,7 +214,11 @@ async function revealItem(path: string) {
                 <span v-if="item.files.length" class="hash" :title="hashTitle">
                     <Hash :size="12" aria-hidden="true" />
                     <span
-                        v-if="quickMode && verifyState.kind !== 'done'"
+                        v-if="
+                            quickMode &&
+                            item.sampled &&
+                            verifyState.kind !== 'done'
+                        "
                         class="hash-kind"
                     >
                         sample
@@ -212,10 +229,7 @@ async function revealItem(path: string) {
             <div class="head-right">
                 <span class="size">{{ item.size }}</span>
                 <button
-                    v-if="
-                        verifyState.kind !== 'done' &&
-                        verifyState.kind !== 'no-duplicates'
-                    "
+                    v-if="showVerify"
                     type="button"
                     class="verify"
                     :disabled="verifyState.kind === 'checking'"
@@ -300,6 +314,8 @@ async function revealItem(path: string) {
     border: 1px solid var(--border);
     border-radius: var(--radius);
     box-shadow: var(--shadow-sm);
+    content-visibility: auto;
+    contain-intrinsic-size: auto 140px;
     transition:
         border-color 0.15s ease,
         box-shadow 0.15s ease;

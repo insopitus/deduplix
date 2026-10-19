@@ -27,4 +27,5 @@ anyhow = "1.0.98"
 rayon = "1.10.0"
 twox-hash = {version="2.1.1",default-features = false,features = ["xxhash64"] }
 wax = "0.6.0"
+nohash-hasher = "0.2.0"
 

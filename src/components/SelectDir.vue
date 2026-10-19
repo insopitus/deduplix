@@ -98,8 +98,8 @@ function convertSize(num: number, unit: SizeUnit) {
         <span class="mode-text">
           <span class="mode-title">Quick mode</span>
           <span class="mode-hint">
-            Skip full hashing. Groups are matched by a 1 KB sample and may be
-            wrong.
+            Skip full hashing. Files up to 4 KB are fully hashed; larger ones
+            use a 4 KB sample and may be wrong.
           </span>
         </span>
         <span class="switch">
