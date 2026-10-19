@@ -30,6 +30,7 @@ type Pair = {
     size: string;
     size_bytes: number;
     files: string[];
+    not_duplicates?: boolean;
 };
 
 const props = defineProps<{
@@ -38,6 +39,7 @@ const props = defineProps<{
         include: string;
         exclude: string;
         size_extend: [number, number];
+        quick_mode: boolean;
     };
 }>();
 const emit = defineEmits<{ back: [] }>();
@@ -62,6 +64,11 @@ const stages: AnalysisStage[] = [
         icon: Hash,
     },
 ];
+
+const quickMode = computed(() => props.config.quick_mode);
+const activeStages = computed(() =>
+    quickMode.value ? stages.slice(0, 2) : stages,
+);
 
 const analysisDone = ref(false);
 const analysisError = ref("");
@@ -101,7 +108,7 @@ async function runAnalysis() {
     // before the webview has registered its listeners, which used to leave
     // the progress bar stuck at 0%.
     const listeners = await Promise.all(
-        stages.map((stage, index) =>
+        activeStages.value.map((stage, index) =>
             listen(stage.event, () => {
                 stageIndex.value = Math.max(stageIndex.value, index + 1);
             }).catch(() => undefined),
@@ -180,17 +187,28 @@ onUnmounted(() => {
 
 runAnalysis();
 
+// Verified groups that turned out not to be duplicates keep their card,
+// even though their file list is now empty.
 const groups = computed(() =>
-    pairs.value.filter((pair) => pair.files.length > 1),
+    pairs.value.filter(
+        (pair) => pair.not_duplicates || pair.files.length > 1,
+    ),
+);
+const duplicateGroups = computed(() =>
+    groups.value.filter((group) => group.files.length > 1),
 );
 const redundantFiles = computed(() =>
-    groups.value.reduce((total, group) => total + group.files.length - 1, 0),
+    groups.value.reduce(
+        (total, group) => total + Math.max(0, group.files.length - 1),
+        0,
+    ),
 );
 const reclaimable = computed(() =>
     formatBytes(
         groups.value.reduce(
             (total, group) =>
-                total + (group.size_bytes ?? 0) * (group.files.length - 1),
+                total +
+                (group.size_bytes ?? 0) * Math.max(0, group.files.length - 1),
             0,
         ),
     ),
@@ -287,9 +305,20 @@ function formatBytes(bytes: number) {
         </div>
 
         <template v-else>
+            <div v-if="quickMode" class="banner warning" role="status">
+                <span class="banner-message">
+                    <TriangleAlert :size="15" aria-hidden="true" />
+                    <span>
+                        <strong>Quick mode:</strong> groups are matched by a
+                        1&nbsp;KB sample hash, so results are not guaranteed to
+                        be accurate. Run a full hash on a group before deleting
+                        files.
+                    </span>
+                </span>
+            </div>
             <div v-if="!analysisDone" class="progress-card">
                 <AnalysisProgress
-                    :stages="stages"
+                    :stages="activeStages"
                     :stage-index="stageIndex"
                 />
             </div>
@@ -297,7 +326,7 @@ function formatBytes(bytes: number) {
             <template v-else>
                 <div v-if="groups.length" class="summary">
                     <div class="stat">
-                        <strong>{{ groups.length }}</strong>
+                        <strong>{{ duplicateGroups.length }}</strong>
                         <span class="stat-label">
                             <Copy :size="13" aria-hidden="true" />
                             duplicate groups
@@ -336,6 +365,7 @@ function formatBytes(bytes: number) {
                         :key="pair.hash + pair.size_bytes"
                         :root-path="workingPath"
                         :item="pair"
+                        :quick-mode="quickMode"
                         @error="actionError = $event"
                     />
                 </section>

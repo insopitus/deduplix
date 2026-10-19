@@ -1,21 +1,126 @@
 <script setup lang="ts">
 import { invoke } from "@tauri-apps/api/core";
 import { ask } from "@tauri-apps/plugin-dialog";
-import { Copy, File, FolderOpen, Hash, Trash } from "@lucide/vue";
+import {
+    Check,
+    Copy,
+    File,
+    FolderOpen,
+    Hash,
+    Trash,
+    TriangleAlert,
+} from "@lucide/vue";
 import { computed, ref } from "vue";
 
 const props = defineProps<{
     rootPath: string;
+    quickMode?: boolean;
     item: {
         hash: string;
         size: string;
         size_bytes?: number;
         files: string[];
+        not_duplicates?: boolean;
     };
 }>();
 const emit = defineEmits<{ error: [message: string] }>();
 
+type VerifyState =
+    | { kind: "idle" }
+    | { kind: "checking" }
+    | { kind: "done"; hash: string; removed: number }
+    | { kind: "no-duplicates" }
+    | { kind: "error"; message: string };
+
 const removing = ref<string | null>(null);
+const verifyState = ref<VerifyState>({ kind: "idle" });
+
+const displayHash = computed(() =>
+    verifyState.value.kind === "done"
+        ? verifyState.value.hash
+        : props.item.hash,
+);
+const hashTitle = computed(() => {
+    if (verifyState.value.kind === "done") {
+        return `XXH64 (full): ${verifyState.value.hash}`;
+    }
+    return props.quickMode
+        ? `XXH64 (1 KB sample): ${props.item.hash}`
+        : `XXH64: ${props.item.hash}`;
+});
+
+async function verifyGroup() {
+    if (verifyState.value.kind === "checking") return;
+    verifyState.value = { kind: "checking" };
+    try {
+        const result = await invoke<{
+            hash: string | null;
+            all_same: boolean;
+            files: { path: string; hash: string | null; error: string | null }[];
+        }>("full_hash_group", {
+            rootPath: props.rootPath,
+            relPaths: props.item.files,
+        });
+
+        const hashed = result.files.filter(
+            (file): file is { path: string; hash: string; error: string | null } =>
+                file.hash !== null,
+        );
+        if (hashed.length !== result.files.length) {
+            const failed = result.files.find((file) => file.hash === null);
+            verifyState.value = {
+                kind: "error",
+                message:
+                    failed?.error ??
+                    "Could not read every file in this group, so nothing was removed.",
+            };
+            return;
+        }
+
+        // Keep the largest set of files that share a full hash. Files outside
+        // that set only matched on the 1 KB sample and are not duplicates.
+        const byHash = new Map<string, string[]>();
+        for (const file of hashed) {
+            const paths = byHash.get(file.hash);
+            if (paths) {
+                paths.push(file.path);
+            } else {
+                byHash.set(file.hash, [file.path]);
+            }
+        }
+
+        let bestHash = "";
+        let bestPaths: string[] = [];
+        for (const [hash, paths] of byHash) {
+            if (paths.length > bestPaths.length) {
+                bestHash = hash;
+                bestPaths = paths;
+            }
+        }
+
+        if (bestPaths.length < 2) {
+            props.item.files.splice(0);
+            props.item.not_duplicates = true;
+            verifyState.value = { kind: "no-duplicates" };
+            return;
+        }
+
+        const keep = new Set(bestPaths);
+        const before = props.item.files.length;
+        for (let index = props.item.files.length - 1; index >= 0; index--) {
+            if (!keep.has(props.item.files[index])) {
+                props.item.files.splice(index, 1);
+            }
+        }
+        verifyState.value = {
+            kind: "done",
+            hash: bestHash,
+            removed: before - props.item.files.length,
+        };
+    } catch (error) {
+        verifyState.value = { kind: "error", message: String(error) };
+    }
+}
 
 const items = computed(() =>
     props.item.files.map((full) => {
@@ -85,17 +190,70 @@ async function revealItem(path: string) {
     <section class="dup-card">
         <header class="dup-head">
             <div class="head-left">
-                <span class="badge">
+                <span v-if="item.files.length" class="badge">
                     <Copy :size="12" aria-hidden="true" />
                     {{ item.files.length }} copies
                 </span>
-                <span class="hash" :title="`XXH64: ${item.hash}`">
+                <span v-else class="badge invalid">
+                    <TriangleAlert :size="12" aria-hidden="true" />
+                    Not duplicates
+                </span>
+                <span v-if="item.files.length" class="hash" :title="hashTitle">
                     <Hash :size="12" aria-hidden="true" />
-                    <span class="hash-value">{{ item.hash }}</span>
+                    <span
+                        v-if="quickMode && verifyState.kind !== 'done'"
+                        class="hash-kind"
+                    >
+                        sample
+                    </span>
+                    <span class="hash-value">{{ displayHash }}</span>
                 </span>
             </div>
-            <span class="size">{{ item.size }}</span>
+            <div class="head-right">
+                <span class="size">{{ item.size }}</span>
+                <button
+                    v-if="
+                        verifyState.kind !== 'done' &&
+                        verifyState.kind !== 'no-duplicates'
+                    "
+                    type="button"
+                    class="verify"
+                    :disabled="verifyState.kind === 'checking'"
+                    :title="
+                        verifyState.kind === 'checking'
+                            ? 'Hashing full file contents'
+                            : 'Compute full hashes for this group'
+                    "
+                    @click="verifyGroup"
+                >
+                    <Hash :size="12" aria-hidden="true" />
+                    {{ verifyState.kind === "checking" ? "Hashing…" : "Full hash" }}
+                </button>
+            </div>
         </header>
+
+        <p v-if="verifyState.kind === 'done'" class="verify-status match">
+            <Check :size="12" aria-hidden="true" />
+            <span>
+                Full hash verified:
+                <span class="verify-hash">{{ verifyState.hash }}</span>
+                <template v-if="verifyState.removed">
+                    ({{ verifyState.removed }} non-duplicate
+                    {{ verifyState.removed === 1 ? "file" : "files" }} removed)
+                </template>
+            </span>
+        </p>
+        <p
+            v-else-if="verifyState.kind === 'no-duplicates'"
+            class="verify-status mismatch"
+        >
+            <TriangleAlert :size="12" aria-hidden="true" />
+            <span>Full hashes differ — these files are not duplicates.</span>
+        </p>
+        <p v-else-if="verifyState.kind === 'error'" class="verify-status error">
+            <TriangleAlert :size="12" aria-hidden="true" />
+            <span>Could not compute full hashes: {{ verifyState.message }}</span>
+        </p>
 
         <ul class="file-list">
             <li
@@ -184,12 +342,53 @@ async function revealItem(path: string) {
     white-space: nowrap;
 }
 
+.badge.invalid {
+    background: var(--danger-soft);
+    color: var(--danger);
+}
+
+.head-right {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex: none;
+    margin-left: auto;
+}
+
 .size {
     flex: none;
     color: var(--muted);
     font-size: 12.5px;
     font-variant-numeric: tabular-nums;
     white-space: nowrap;
+}
+
+.verify {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    padding: 4px 9px;
+    border-radius: 7px;
+    border: 1px solid var(--border);
+    background: transparent;
+    color: var(--accent-deep);
+    font-size: 12px;
+    font-weight: 500;
+    cursor: pointer;
+    transition:
+        background 0.12s ease,
+        border-color 0.12s ease,
+        opacity 0.12s ease;
+}
+
+.verify:hover:not(:disabled) {
+    background: var(--accent-soft);
+    border-color: transparent;
+}
+
+.verify:disabled {
+    opacity: 0.55;
+    cursor: progress;
 }
 
 .hash {
@@ -217,6 +416,57 @@ async function revealItem(path: string) {
     text-overflow: ellipsis;
     white-space: nowrap;
     line-height: 1;
+}
+
+.hash-kind {
+    flex: none;
+    padding: 1px 5px;
+    border-radius: 999px;
+    background: var(--warning-soft);
+    color: var(--warning);
+    font-size: 9.5px;
+    font-weight: 700;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+}
+
+.verify-status {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin: 8px 0 0;
+    padding: 7px 10px;
+    border-radius: 8px;
+    font-size: 12px;
+    line-height: 1.4;
+}
+
+.verify-status :deep(svg) {
+    flex: none;
+}
+
+.verify-status.match {
+    background: var(--success-soft);
+    color: var(--success);
+}
+
+.verify-status.mismatch {
+    background: var(--danger-soft);
+    border: 1px solid var(--danger-border);
+    color: var(--danger);
+}
+
+.verify-status.error {
+    background: var(--warning-soft);
+    border: 1px solid var(--warning-border);
+    color: var(--warning);
+}
+
+.verify-hash {
+    font-family:
+        ui-monospace, SFMono-Regular, Menlo, Monaco, "Cascadia Mono",
+        "Roboto Mono", monospace;
+    font-variant-numeric: tabular-nums;
 }
 
 .file-list {

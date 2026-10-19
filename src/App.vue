@@ -9,6 +9,7 @@ const config: Ref<PathConfig["config"]> = ref({
     size_extend: [0, 2 ** 64 - 1],
     include: "",
     exclude: "",
+    quick_mode: false,
 });
 function handlePathSelect(p: PathConfig) {
     workingPath.value = p.path;
@@ -159,7 +160,7 @@ input[disabled] {
 
 @media (max-width: 560px) {
     .container {
-        padding: 18px 14px 28px;
+        padding: 14px;
     }
 }
 

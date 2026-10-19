@@ -5,4 +5,4 @@ Deduplix is a tool to find duplicates in a selected directory. It uses a 1) size
 ## todos
 - [x] add exclude/include search conditions
 - [x] UI polishing (i suck at ui designing. LLM did a better one)
-- [ ] a quick mode to skip "full hash" step
+- [x] a quick mode to skip "full hash" step

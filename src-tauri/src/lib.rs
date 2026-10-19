@@ -129,74 +129,80 @@ fn start_analysis(
     }
     let elapsed = instant.elapsed().as_secs_f32();
     println!("Rough hashing took {} seconds", elapsed);
-    let instant = Instant::now();
     let _ = window.emit("quick-hash-done", ());
 
     // Stage 3: hash full file contents.
+    // Quick mode stops after the sampled hash, so its groups are only
+    // candidates and must be verified explicitly before files are removed.
     // Small files already have a complete hash from stage 2, so reuse it.
     // All remaining files are hashed in one flat parallel batch; this keeps
     // every core busy even when there are many groups with only two files.
-    let mut map: HashMap<u64, HashMap<u64, Vec<PathBuf>>> = HashMap::new();
-    let mut large_files: Vec<(u64, PathBuf)> = Vec::new();
-    for (size, quick_map) in quick_map_by_size {
-        if size <= SAMPLE_SIZE as u64 {
-            let by_size = map.entry(size).or_default();
-            for (hash, list) in quick_map {
-                by_size.insert(hash, list);
-            }
-        } else {
-            for list in quick_map.into_values() {
-                for path in list {
-                    large_files.push((size, path));
+    let map: HashMap<u64, HashMap<u64, Vec<PathBuf>>> = if config.quick_mode {
+        println!("Quick mode: skipping full hashing");
+        quick_map_by_size
+    } else {
+        let instant = Instant::now();
+        let mut map: HashMap<u64, HashMap<u64, Vec<PathBuf>>> = HashMap::new();
+        let mut large_files: Vec<(u64, PathBuf)> = Vec::new();
+        for (size, quick_map) in quick_map_by_size {
+            if size <= SAMPLE_SIZE as u64 {
+                let by_size = map.entry(size).or_default();
+                for (hash, list) in quick_map {
+                    by_size.insert(hash, list);
+                }
+            } else {
+                for list in quick_map.into_values() {
+                    for path in list {
+                        large_files.push((size, path));
+                    }
                 }
             }
         }
-    }
-    if is_cancelled() {
-        return Ok(Report::cancelled());
-    }
+        if is_cancelled() {
+            return Ok(Report::cancelled());
+        }
 
-    let hashed: Vec<(u64, u64, PathBuf)> = large_files
-        .into_par_iter()
-        .map_init(
-            || vec![0u8; BATCH_SIZE],
-            |buf, (size, path)| match hash_file(&path, buf, token.as_ref()) {
-                HashOutcome::Hashed(hash) => Some((size, hash, path)),
-                HashOutcome::Skipped => {
-                    skipped.lock().unwrap().push(path);
-                    None
-                }
-                HashOutcome::Cancelled => None,
-            },
-        )
-        .flatten()
-        .collect();
-    if is_cancelled() {
-        return Ok(Report::cancelled());
-    }
+        let hashed: Vec<(u64, u64, PathBuf)> = large_files
+            .into_par_iter()
+            .map_init(
+                || vec![0u8; BATCH_SIZE],
+                |buf, (size, path)| match hash_file(&path, buf, token.as_ref()) {
+                    HashOutcome::Hashed(hash) => Some((size, hash, path)),
+                    HashOutcome::Skipped => {
+                        skipped.lock().unwrap().push(path);
+                        None
+                    }
+                    HashOutcome::Cancelled => None,
+                },
+            )
+            .flatten()
+            .collect();
+        if is_cancelled() {
+            return Ok(Report::cancelled());
+        }
 
-    for (size, hash, path) in hashed {
-        map.entry(size)
-            .or_default()
-            .entry(hash)
-            .or_default()
-            .push(path);
-    }
+        for (size, hash, path) in hashed {
+            map.entry(size)
+                .or_default()
+                .entry(hash)
+                .or_default()
+                .push(path);
+        }
 
-    let map: HashMap<u64, HashMap<u64, Vec<PathBuf>>> = map
-        .into_iter()
-        .map(|(size, hash_map)| {
-            let hash_map = hash_map
-                .into_iter()
-                .filter(|(_, list)| list.len() > 1)
-                .collect();
-            (size, hash_map)
-        })
-        .collect();
+        let elapsed = instant.elapsed().as_secs_f32();
+        println!("Long hashing took {} seconds", elapsed);
+        let _ = window.emit("full-hash-done", ());
 
-    let elapsed = instant.elapsed().as_secs_f32();
-    println!("Long hashing took {} seconds", elapsed);
-    let _ = window.emit("full-hash-done", ());
+        map.into_iter()
+            .map(|(size, hash_map)| {
+                let hash_map = hash_map
+                    .into_iter()
+                    .filter(|(_, list)| list.len() > 1)
+                    .collect();
+                (size, hash_map)
+            })
+            .collect()
+    };
 
     let mut pairs = vec![];
     for (size, hash_map) in map {
@@ -335,6 +341,66 @@ fn cancel_analysis(state: tauri::State<'_, AnalysisState>, id: u64) {
     }
 }
 
+#[derive(Serialize)]
+struct GroupVerification {
+    /// Common full-file hash when every file matches, otherwise `None`.
+    hash: Option<String>,
+    all_same: bool,
+    files: Vec<FileVerification>,
+}
+
+#[derive(Serialize)]
+struct FileVerification {
+    path: String,
+    hash: Option<String>,
+    error: Option<String>,
+}
+
+/// Hash the full contents of every file in one candidate group. Used to check
+/// groups produced by quick mode, where only a 1 KB sample was compared.
+#[tauri::command(async)]
+fn full_hash_group(root_path: &str, rel_paths: Vec<String>) -> Result<GroupVerification, String> {
+    let root = Path::new(root_path);
+    let token = AtomicBool::new(false);
+    let files: Vec<FileVerification> = rel_paths
+        .par_iter()
+        .map_init(
+            || vec![0u8; BATCH_SIZE],
+            |buf, rel_path| {
+                let path = root.join(rel_path);
+                match hash_file(&path, buf, &token) {
+                    HashOutcome::Hashed(hash) => FileVerification {
+                        path: rel_path.clone(),
+                        hash: Some(format!("{:016X}", hash)),
+                        error: None,
+                    },
+                    HashOutcome::Skipped => FileVerification {
+                        path: rel_path.clone(),
+                        hash: None,
+                        error: Some("Could not read the file".to_string()),
+                    },
+                    HashOutcome::Cancelled => FileVerification {
+                        path: rel_path.clone(),
+                        hash: None,
+                        error: Some("Hashing was interrupted".to_string()),
+                    },
+                }
+            },
+        )
+        .collect();
+
+    let all_same = !files.is_empty()
+        && files[0].hash.is_some()
+        && files.iter().all(|file| file.hash == files[0].hash);
+    let hash = all_same.then(|| files[0].hash.clone().unwrap_or_default());
+
+    Ok(GroupVerification {
+        hash,
+        all_same,
+        files,
+    })
+}
+
 #[tauri::command]
 fn remove_file(root_path: &str, rel_path: &str) -> Result<(), String> {
     let path = PathBuf::from(root_path).join(rel_path);
@@ -349,6 +415,7 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             start_analysis,
             cancel_analysis,
+            full_hash_group,
             remove_file,
             reveal_file_in_explorer
         ])
@@ -469,6 +536,9 @@ struct Config {
     pub include: String,
     pub exclude: String,
     pub size_extend: (u64, u64),
+    /// Stop after the sampled-hash stage instead of hashing full contents.
+    #[serde(default)]
+    pub quick_mode: bool,
 }
 
 fn to_human_readable_size(size: u64) -> String {

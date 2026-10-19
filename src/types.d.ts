@@ -12,6 +12,7 @@ export type PathConfig = {
     config:{
         include:string,
         exclude:string,
-        size_extend:[number,number]
+        size_extend:[number,number],
+        quick_mode:boolean
     }
 }

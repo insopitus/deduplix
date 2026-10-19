@@ -14,6 +14,7 @@ const GIGA_BYTE = MEGA_BYTE * 1024;
 
 const include = ref("");
 const exclude = ref("");
+const quickMode = ref(false);
 const minSize = ref(1);
 const minSizeUnit: Ref<SizeUnit> = ref("KB");
 const maxSize = ref(10);
@@ -39,6 +40,7 @@ async function chooseDirectory() {
             convertSize(minSize.value, minSizeUnit.value),
             convertSize(maxSize.value, maxSizeUnit.value),
           ],
+          quick_mode: quickMode.value,
         },
       });
     }
@@ -92,11 +94,21 @@ function convertSize(num: number, unit: SizeUnit) {
         </p>
       </div>
 
-      <button class="primary" type="button" @click="chooseDirectory">
-        <FolderOpen :size="18" :stroke-width="2" aria-hidden="true" />
-        Choose a directory…
-      </button>
-      <p class="start-hint">Analysis starts right after you pick a folder.</p>
+      <label class="mode-toggle">
+        <span class="mode-text">
+          <span class="mode-title">Quick mode</span>
+          <span class="mode-hint">
+            Skip full hashing. Groups are matched by a 1 KB sample and may be
+            wrong.
+          </span>
+        </span>
+        <span class="switch">
+          <input v-model="quickMode" type="checkbox" />
+          <span class="switch-track" aria-hidden="true">
+            <span class="switch-thumb"></span>
+          </span>
+        </span>
+      </label>
 
       <section class="filters">
         <div class="filters-head">
@@ -160,6 +172,13 @@ function convertSize(num: number, unit: SizeUnit) {
           </LabeledInput>
         </div>
       </section>
+
+      <div class="start-action">
+        <button class="primary" type="button" @click="chooseDirectory">
+          <FolderOpen :size="18" :stroke-width="2" aria-hidden="true" />
+          Choose a directory to start…
+        </button>
+      </div>
     </div>
   </div>
 </template>
@@ -244,11 +263,89 @@ button.primary:active {
   transform: translateY(0);
 }
 
-.start-hint {
-  margin: -4px 0 2px;
-  text-align: center;
+.start-action {
+  margin-top: 6px;
+  padding-top: 18px;
+  border-top: 1px solid var(--border);
+}
+
+.mode-toggle {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-top: 2px;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--card-subtle);
+  cursor: pointer;
+}
+
+.mode-text {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 0;
+}
+
+.mode-title {
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.mode-hint {
   font-size: 12px;
   color: var(--muted);
+}
+
+.switch {
+  position: relative;
+  display: inline-flex;
+  flex: none;
+}
+
+.switch input {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  opacity: 0;
+  cursor: pointer;
+}
+
+.switch-track {
+  display: block;
+  width: 36px;
+  height: 20px;
+  padding: 2px;
+  border-radius: 999px;
+  background: var(--border-strong);
+  transition: background 0.15s ease;
+}
+
+.switch-thumb {
+  display: block;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: var(--card);
+  box-shadow: var(--shadow-sm);
+  transition: transform 0.15s ease;
+}
+
+.switch input:checked + .switch-track {
+  background: var(--accent);
+}
+
+.switch input:checked + .switch-track .switch-thumb {
+  transform: translateX(16px);
+}
+
+.switch input:focus-visible + .switch-track {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
 }
 
 .filters {
@@ -309,8 +406,7 @@ button.primary:active {
   .hero h1 {
     font-size: 21px;
   }
-  .field-grid,
-  .size-line {
+  .field-grid {
     grid-template-columns: minmax(0, 1fr);
   }
 }
