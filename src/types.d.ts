@@ -7,6 +7,10 @@ export type AnalysisStage = {
     hint: string;
     icon: Component;
 };
+export type StageProgress = {
+    done: number;
+    total: number;
+};
 export type PathConfig = {
     path:string,
     config:{

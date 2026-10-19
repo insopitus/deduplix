@@ -4,5 +4,3 @@
 fn main() {
     dedupper_lib::run();
 }
-
-

@@ -1,21 +1,38 @@
 <script setup lang="ts">
 import { Check } from "@lucide/vue";
 import { computed } from "vue";
-import type { AnalysisStage } from "../types";
+import type { AnalysisStage, StageProgress } from "../types";
 
 const props = defineProps<{
     stages: AnalysisStage[];
     stageIndex: number;
+    progress: (StageProgress | null)[];
 }>();
 
-const progress = computed(() =>
-    Math.min(
-        100,
-        Math.max(6, (props.stageIndex / props.stages.length) * 100),
-    ),
-);
-const currentStage = computed<AnalysisStage | undefined>(
+const activeStage = computed<AnalysisStage | undefined>(
     () => props.stages[props.stageIndex],
+);
+
+/**
+ * `null` means the stage has no measurable total yet and should animate.
+ */
+function percentOf(index: number): number | null {
+    if (index < props.stageIndex) return 100;
+    if (index > props.stageIndex) return 0;
+    const progress = props.progress[index];
+    if (!progress) return null;
+    if (progress.total <= 0) return 100;
+    return Math.min(100, (progress.done / progress.total) * 100);
+}
+
+function isIndeterminate(index: number) {
+    return index === props.stageIndex && percentOf(index) === null;
+}
+
+const activePercent = computed(() =>
+    props.stageIndex < props.stages.length
+        ? percentOf(props.stageIndex)
+        : null,
 );
 </script>
 
@@ -24,36 +41,21 @@ const currentStage = computed<AnalysisStage | undefined>(
         <div class="progress-head">
             <div class="progress-title">
                 <span
-                    v-if="currentStage"
+                    v-if="activeStage"
                     class="spinner"
                     aria-hidden="true"
                 ></span>
-                <span>{{ currentStage ? currentStage.label : "Finishing up" }}</span>
-                <span v-if="currentStage" class="hint">
-                    {{ currentStage.hint }}
+                <span>{{ activeStage ? activeStage.label : "Finishing up" }}</span>
+                <span v-if="activeStage" class="hint">
+                    {{ activeStage.hint }}
                 </span>
             </div>
-            <span class="percent">{{ Math.round(progress) }}%</span>
+            <span v-if="activePercent !== null" class="percent">
+                {{ Math.round(activePercent) }}%
+            </span>
         </div>
 
-        <div
-            class="bar"
-            role="progressbar"
-            aria-label="Analysis progress"
-            aria-valuemin="0"
-            aria-valuemax="100"
-            :aria-valuenow="Math.round(progress)"
-        >
-            <div class="bar-fill" :style="{ width: progress + '%' }">
-                <span
-                    v-if="currentStage"
-                    class="shimmer"
-                    aria-hidden="true"
-                ></span>
-            </div>
-        </div>
-
-        <ol class="steps">
+        <ol class="steps" :style="{ '--stage-count': stages.length }">
             <li
                 v-for="(stage, index) in stages"
                 :key="stage.event"
@@ -69,16 +71,48 @@ const currentStage = computed<AnalysisStage | undefined>(
                         :stroke-width="3"
                     />
                 </span>
-                <span class="step-text">
-                    <span class="step-label">
-                        <component
-                            :is="stage.icon"
-                            :size="13"
-                            aria-hidden="true"
-                        />
-                        {{ stage.label }}
-                    </span>
-                    <span class="step-hint">{{ stage.hint }}</span>
+
+                <div class="step-body">
+                    <div class="step-text">
+                        <span class="step-label">
+                            <component
+                                :is="stage.icon"
+                                :size="13"
+                                aria-hidden="true"
+                            />
+                            {{ stage.label }}
+                        </span>
+                        <span class="step-hint">{{ stage.hint }}</span>
+                    </div>
+                    <div
+                        class="bar"
+                        role="progressbar"
+                        :aria-label="`${stage.label} progress`"
+                        aria-valuemin="0"
+                        aria-valuemax="100"
+                        :aria-valuenow="
+                            isIndeterminate(index)
+                                ? undefined
+                                : Math.round(percentOf(index) ?? 0)
+                        "
+                    >
+                        <div
+                            v-if="isIndeterminate(index)"
+                            class="bar-fill indeterminate"
+                        ></div>
+                        <div
+                            v-else
+                            class="bar-fill"
+                            :style="{ width: (percentOf(index) ?? 0) + '%' }"
+                        ></div>
+                    </div>
+                </div>
+
+                <span
+                    v-if="index === stageIndex && percentOf(index) !== null"
+                    class="step-percent"
+                >
+                    {{ Math.round(percentOf(index) ?? 0) }}%
                 </span>
             </li>
         </ol>
@@ -135,40 +169,9 @@ const currentStage = computed<AnalysisStage | undefined>(
     animation: spin 0.8s linear infinite;
 }
 
-.bar {
-    position: relative;
-    width: 100%;
-    height: 7px;
-    overflow: hidden;
-    border-radius: 999px;
-    background: var(--border);
-}
-
-.bar-fill {
-    position: relative;
-    height: 100%;
-    overflow: hidden;
-    border-radius: 999px;
-    background: linear-gradient(90deg, var(--accent), var(--accent-2));
-    transition: width 0.35s ease;
-}
-
-.shimmer {
-    position: absolute;
-    inset: 0;
-    background: linear-gradient(
-        90deg,
-        transparent,
-        rgba(255, 255, 255, 0.45),
-        transparent
-    );
-    transform: translateX(-100%);
-    animation: shimmer 1.4s ease-in-out infinite;
-}
-
 .steps {
     display: grid;
-    grid-template-columns: repeat(3, minmax(0, 1fr));
+    grid-template-columns: repeat(var(--stage-count, 3), minmax(0, 1fr));
     gap: 8px;
     margin: 2px 0 0;
     padding: 0;
@@ -176,8 +179,9 @@ const currentStage = computed<AnalysisStage | undefined>(
 }
 
 .steps li {
-    display: flex;
-    align-items: flex-start;
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr) auto;
+    align-items: start;
     gap: 8px;
     padding: 10px;
     border: 1px solid var(--border);
@@ -227,6 +231,13 @@ const currentStage = computed<AnalysisStage | undefined>(
     border-color: var(--success);
 }
 
+.step-body {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    min-width: 0;
+}
+
 .step-text {
     display: flex;
     flex-direction: column;
@@ -252,19 +263,49 @@ const currentStage = computed<AnalysisStage | undefined>(
     color: var(--muted);
 }
 
+.step-percent {
+    font-size: 11px;
+    color: var(--muted);
+    font-variant-numeric: tabular-nums;
+}
+
+.bar {
+    position: relative;
+    width: 100%;
+    height: 5px;
+    overflow: hidden;
+    border-radius: 999px;
+    background: var(--border);
+}
+
+.bar-fill {
+    height: 100%;
+    border-radius: 999px;
+    background: linear-gradient(90deg, var(--accent), var(--accent-2));
+    transition: width 0.25s linear;
+}
+
+.done .bar-fill {
+    background: var(--success);
+}
+
+.bar-fill.indeterminate {
+    width: 35%;
+    animation: indeterminate 1.1s ease-in-out infinite;
+}
+
 @keyframes spin {
     to {
         transform: rotate(360deg);
     }
 }
 
-@keyframes shimmer {
+@keyframes indeterminate {
     0% {
         transform: translateX(-100%);
     }
-    60%,
     100% {
-        transform: translateX(100%);
+        transform: translateX(285%);
     }
 }
 

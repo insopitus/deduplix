@@ -21,7 +21,7 @@ import {
 } from "@lucide/vue";
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 import { computed, onUnmounted, ref } from "vue";
-import { type AnalysisStage } from "../types";
+import { type AnalysisStage, type StageProgress } from "../types";
 import AnalysisProgress from "./AnalysisProgress.vue";
 import DupGroup from "./DupGroup.vue";
 
@@ -70,6 +70,24 @@ const activeStages = computed(() =>
     quickMode.value ? stages.slice(0, 2) : stages,
 );
 
+const quickProgress = ref<StageProgress | null>(null);
+const fullProgress = ref<StageProgress | null>(null);
+const stageProgress = computed<(StageProgress | null)[]>(() =>
+    quickMode.value
+        ? [null, quickProgress.value]
+        : [null, quickProgress.value, fullProgress.value],
+);
+
+function mergeProgress(
+    current: StageProgress | null,
+    next: StageProgress,
+): StageProgress {
+    return {
+        total: next.total,
+        done: Math.max(current?.done ?? 0, next.done),
+    };
+}
+
 const analysisDone = ref(false);
 const analysisError = ref("");
 const actionError = ref("");
@@ -107,13 +125,25 @@ async function runAnalysis() {
     // Subscribe before invoking the command. A small directory can finish
     // before the webview has registered its listeners, which used to leave
     // the progress bar stuck at 0%.
-    const listeners = await Promise.all(
-        activeStages.value.map((stage, index) =>
+    const listeners = await Promise.all([
+        ...activeStages.value.map((stage, index) =>
             listen(stage.event, () => {
                 stageIndex.value = Math.max(stageIndex.value, index + 1);
             }).catch(() => undefined),
         ),
-    );
+        listen<StageProgress>("quick-hash-progress", (event) => {
+            quickProgress.value = mergeProgress(
+                quickProgress.value,
+                event.payload,
+            );
+        }).catch(() => undefined),
+        listen<StageProgress>("full-hash-progress", (event) => {
+            fullProgress.value = mergeProgress(
+                fullProgress.value,
+                event.payload,
+            );
+        }).catch(() => undefined),
+    ]);
     if (disposed) {
         unsubscribeAll(listeners);
         return;
@@ -321,6 +351,7 @@ function formatBytes(bytes: number) {
                 <AnalysisProgress
                     :stages="activeStages"
                     :stage-index="stageIndex"
+                    :progress="stageProgress"
                 />
             </div>
 
