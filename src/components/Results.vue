@@ -583,17 +583,4 @@ button.back.cancel:hover:not(:disabled) {
     max-width: 34ch;
 }
 
-@media (max-width: 560px) {
-    .summary {
-        grid-template-columns: minmax(0, 1fr);
-    }
-    .path-label {
-        display: none;
-    }
-    .stat {
-        flex-direction: row;
-        align-items: baseline;
-        gap: 8px;
-    }
-}
 </style>

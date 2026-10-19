@@ -325,13 +325,4 @@ async function revealItem(path: string) {
     color: #ffffff;
 }
 
-@media (max-width: 560px) {
-    .file-item {
-        grid-template-columns: auto minmax(0, 1fr);
-    }
-    .ctrl {
-        grid-column: 1 / -1;
-        justify-content: flex-end;
-    }
-}
 </style>
